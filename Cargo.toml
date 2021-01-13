@@ -1,0 +1,26 @@
+[package]
+name = "kube-utils"
+version = "0.1.0"
+authors = ["Mikail Bagishov <bagishov.mikail@yandex.ru>"]
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.38"
+base64 = "0.13.0"
+futures-util = "0.3.9"
+# hyper = { version = "0.14.2", features = [] }
+json-patch = "0.2.6"
+k8s-openapi = "0.10.0"
+kube = "0.47.0"
+kube-runtime = "0.47.0"
+serde = "1.0.119"
+serde_json = "1.0.61"
+tokio = { version = "1.0.1", features = ["time", "macros"] }
+tokio-stream = "0.1.2"
+tracing = "0.1.22"
+# tower = "0.4.2"
+
+[dev-dependencies]
+
+k8s-openapi = { version = "0.10.0", features = ["v1_19"] }
+ 
