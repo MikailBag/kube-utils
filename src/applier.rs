@@ -1,4 +1,8 @@
 use anyhow::Context as _;
+use kube::{
+    api::{ObjectMeta, PatchParams},
+    Api,
+};
 /// Defines how exactly resources should be applied
 pub enum Strategy {
     /// Return an error if resource with the same name already exists
@@ -26,42 +30,68 @@ impl Applier {
         }
     }
 
+    pub async fn do_apply<
+        K: kube::api::Meta + Clone + serde::de::DeserializeOwned + serde::Serialize,
+    >(
+        &self,
+        resource: &K,
+        api: Api<K>,
+    ) -> anyhow::Result<()> {
+        let repr = serde_yaml::to_string(&resource)?;
+        println!("{}", repr);
+
+        match &self.strategy {
+            Strategy::Create => {
+                api.create(&Default::default(), resource).await?;
+            }
+            Strategy::Apply { field_manager } => {
+                api.patch(
+                    resource
+                        .meta()
+                        .name
+                        .as_ref()
+                        .context("name missing in metadata")?,
+                    &PatchParams::apply(field_manager),
+                    serde_json::to_vec(&resource)?,
+                )
+                .await?;
+            }
+            Strategy::Overwrite => {
+                anyhow::bail!("TODO");
+            }
+        }
+        Ok(())
+    }
+
     /// Applies a resource
     pub async fn apply<
         K: kube::api::Meta
-            + k8s_openapi::Metadata<Ty = kube::api::ObjectMeta>
+            + k8s_openapi::Metadata<Ty = ObjectMeta>
             + Clone
             + serde::de::DeserializeOwned
             + serde::Serialize,
     >(
         &self,
-        mut res: K,
+        mut resource: K,
     ) -> anyhow::Result<()> {
-        let meta = res.metadata_mut();
+        let meta = resource.metadata_mut();
         let ns = meta
             .namespace
             .get_or_insert_with(|| self.default_namespace.clone())
             .clone();
 
-        let repr = serde_json::to_string(&res)?;
-        println!("{}", repr);
+        let api = Api::namespaced(self.client.clone(), &ns);
+        self.do_apply(&resource, api).await
+    }
 
-        let api = kube::Api::<K>::namespaced(self.client.clone(), &ns);
-        match &self.strategy {
-            Strategy::Create => {
-                api.create(&Default::default(), &res).await?;
-            }
-            Strategy::Apply { field_manager } => {
-                api.patch(
-                    res.metadata().name.as_ref().context("name missing")?,
-                    &kube::api::PatchParams::apply(field_manager),
-                    serde_json::to_vec(&res)?,
-                )
-                .await?;
-            }
-            Strategy::Overwrite => {}
-        }
-
-        Ok(())
+    /// Applies a cluster-scoped resource
+    pub async fn apply_global<
+        K: kube::api::Meta + Clone + serde::de::DeserializeOwned + serde::Serialize,
+    >(
+        &self,
+        resource: K,
+    ) -> anyhow::Result<()> {
+        let api = Api::all(self.client.clone());
+        self.do_apply(&resource, api).await
     }
 }
