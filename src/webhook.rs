@@ -60,6 +60,19 @@ impl Decision {
         self
     }
 
+    pub fn has_mutations(&self, original: &serde_json::Value) -> bool {
+        let modified = match &self.0 {
+            Choice::Allow { modified } => modified,
+            _ => return false,
+        };
+        let modified = match modified.as_ref() {
+            Some(m) => m,
+            None => return false,
+        };
+        let patch = json_patch::diff(&original, &modified);
+        !patch.0.is_empty()
+    }
+
     pub fn finish(self, req: &AdmissionReviewRequest) -> AdmissionReviewResponse {
         let response = match self.0 {
             Choice::Allow { modified } => {
