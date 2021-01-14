@@ -7,7 +7,7 @@ use k8s_openapi::Resource;
 use super::Rejection;
 
 /// Type that is able to review admission requests
-pub trait Review: 'static {
+pub trait Review: Send + Sync + 'static {
     /// Resource to review
     type Resource: kube::api::Meta + serde::ser::Serialize + serde::de::DeserializeOwned + Clone;
 
@@ -54,7 +54,7 @@ impl<R: Review> DynReview for DynReviewer<R> {
 
 /// High-level admission workflow
 pub struct Server {
-    reviewers: Vec<Box<dyn DynReview>>,
+    reviewers: Vec<Box<dyn DynReview + Send + Sync + 'static>>,
 }
 
 impl Server {
