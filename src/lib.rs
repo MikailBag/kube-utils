@@ -44,7 +44,7 @@ where
     Ok(())
 }
 
-pub async fn make_reflector<
+pub fn make_reflector<
     K: kube::api::Meta + Clone + Send + Sync + serde::de::DeserializeOwned + 'static,
 >(
     api: kube::Api<K>,
