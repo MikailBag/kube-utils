@@ -43,3 +43,30 @@ where
     api.replace(name, &Default::default(), &new).await?;
     Ok(())
 }
+
+pub async fn make_reflector<
+    K: kube::api::Meta + Clone + Send + Sync + serde::de::DeserializeOwned + 'static,
+>(
+    api: kube::Api<K>,
+    cancel: tokio_util::sync::CancellationToken,
+) -> kube_runtime::reflector::Store<K> {
+    let watcher = kube_runtime::watcher(api, Default::default());
+    let writer = kube_runtime::reflector::store::Writer::default();
+    let store = writer.as_reader();
+    let reflector = kube_runtime::reflector::reflector(writer, watcher);
+    let fut = async move {
+        tokio::pin!(reflector);
+        while let Some(item) = futures_util::StreamExt::next(&mut reflector).await {
+            if let Err(e) = item {
+                tracing::warn!("reflection: error: {}", e);
+            }
+        }
+    };
+    tokio::task::spawn(async move {
+        tokio::select! {
+           _ = fut => (),
+           _ = cancel.cancelled() => ()
+        }
+    });
+    store
+}
