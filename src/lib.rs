@@ -3,6 +3,7 @@ pub mod delete;
 pub mod health;
 pub mod wait;
 pub mod webhook;
+pub mod storage;
 
 use anyhow::Context as _;
 use kube::Api;
