@@ -167,8 +167,8 @@ async fn reconciler<P: Provision>(
     );
     let mut pv_labels = provision.labels.clone();
     pv_labels.insert(
-        "storage.kube-utils.rs/provisioner".to_string(),
-        P::NAME.to_string(),
+        format!("storage.kube-utils.rs/provisioner"),
+        base64::encode(P::NAME),
     );
 
     let pv = PersistentVolume {

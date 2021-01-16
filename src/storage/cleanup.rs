@@ -11,7 +11,7 @@ use kube_runtime::controller::{Context, Controller, ReconcilerAction};
 #[tracing::instrument(skip(cx))]
 pub(super) async fn run<P: Provision>(cx: Context<ContextData<P>>) {
     let pv_lp = ListParams {
-        label_selector: Some(format!("storage.kube-utils.rs/provisioner={}", P::NAME)),
+        label_selector: Some(format!("storage.kube-utils.rs/provisioner={}", base64::encode(P::NAME))),
         ..Default::default()
     };
     let fut = Controller::new(
