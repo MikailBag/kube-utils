@@ -184,12 +184,12 @@ pub enum AccessMode {
 pub struct ProvisionedVolume {
     /// Spec of the PV. There is no need to set `claim_ref` or `access_modes`,
     /// because they will be set automatically,
-    pv_spec: PersistentVolumeSpec,
+    pub pv_spec: PersistentVolumeSpec,
     /// Additional labels to set on the PV. Please note that they must match
     /// selector on the PVC.
-    labels: BTreeMap<String, String>,
+    pub labels: BTreeMap<String, String>,
     /// Additional annotations to set on the PV.
-    annotations: BTreeMap<String, String>,
+    pub annotations: BTreeMap<String, String>,
 }
 
 /// Building blocks for creating a provisioner
