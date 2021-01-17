@@ -1,6 +1,6 @@
 use anyhow::Context as _;
 use kube::{
-    api::{ObjectMeta, PatchParams},
+    api::{Meta, ObjectMeta, PatchParams},
     Api,
 };
 /// Defines how exactly resources should be applied
@@ -31,7 +31,11 @@ impl Applier {
     }
 
     pub async fn do_apply<
-        K: kube::api::Meta + Clone + serde::de::DeserializeOwned + serde::Serialize,
+        K: Meta
+            + k8s_openapi::Metadata<Ty = ObjectMeta>
+            + Clone
+            + serde::de::DeserializeOwned
+            + serde::Serialize,
     >(
         &self,
         resource: &K,
@@ -46,18 +50,21 @@ impl Applier {
             }
             Strategy::Apply { field_manager } => {
                 api.patch(
-                    resource
-                        .meta()
-                        .name
-                        .as_ref()
-                        .context("name missing in metadata")?,
+                    &resource.name(),
                     &PatchParams::apply(field_manager),
                     serde_json::to_vec(&resource)?,
                 )
                 .await?;
             }
             Strategy::Overwrite => {
-                anyhow::bail!("TODO");
+                let _ = api.create(&Default::default(), &resource).await;
+                crate::patch_with(
+                    api.clone().into_client(),
+                    |_| async { Ok(resource.clone()) },
+                    resource.namespace().as_deref(),
+                    &resource.name(),
+                )
+                .await?;
             }
         }
         Ok(())
@@ -86,7 +93,11 @@ impl Applier {
 
     /// Applies a cluster-scoped resource
     pub async fn apply_global<
-        K: kube::api::Meta + Clone + serde::de::DeserializeOwned + serde::Serialize,
+        K: kube::api::Meta
+            + k8s_openapi::Metadata<Ty = ObjectMeta>
+            + Clone
+            + serde::de::DeserializeOwned
+            + serde::Serialize,
     >(
         &self,
         resource: K,

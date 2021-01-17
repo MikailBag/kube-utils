@@ -8,7 +8,7 @@ use k8s_openapi::{
         core::v1::{PersistentVolume, PersistentVolumeClaim},
         storage::v1::StorageClass,
     },
-    apimachinery::pkg::{apis::meta::v1::LabelSelector, api::resource::Quantity},
+    apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::LabelSelector},
 };
 use kube::{
     api::{Meta, ObjectMeta},
@@ -157,7 +157,10 @@ async fn reconciler<P: Provision>(
     pv.volume_mode = Some(volume_mode.to_string());
     {
         let mut resources = BTreeMap::new();
-        resources.insert("storage".to_string(), Quantity(volume_size.unwrap_or("1Ki").to_string()));
+        resources.insert(
+            "storage".to_string(),
+            Quantity(volume_size.unwrap_or("1Ki").to_string()),
+        );
         pv.capacity = Some(resources);
     }
     let mut pv_annotaions = provision.annotations.clone();

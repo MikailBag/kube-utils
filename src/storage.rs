@@ -7,8 +7,7 @@ use futures_util::future::BoxFuture;
 use k8s_openapi::{
     api::{
         core::v1::{
-            Event as K8sEvent, EventSource, ObjectReference, PersistentVolume,
-          PersistentVolumeSpec,
+            Event as K8sEvent, EventSource, ObjectReference, PersistentVolume, PersistentVolumeSpec,
         },
         storage::v1::StorageClass,
     },
