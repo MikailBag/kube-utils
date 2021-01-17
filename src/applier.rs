@@ -1,4 +1,3 @@
-use anyhow::Context as _;
 use kube::{
     api::{Meta, ObjectMeta, PatchParams},
     Api,
@@ -44,6 +43,8 @@ impl Applier {
         let repr = serde_yaml::to_string(&resource)?;
         println!("{}", repr);
 
+        let client = api.clone().into_client();
+
         match &self.strategy {
             Strategy::Create => {
                 api.create(&Default::default(), resource).await?;
@@ -57,14 +58,8 @@ impl Applier {
                 .await?;
             }
             Strategy::Overwrite => {
-                let _ = api.create(&Default::default(), &resource).await;
-                crate::patch_with(
-                    api.clone().into_client(),
-                    |_| async { Ok(resource.clone()) },
-                    resource.namespace().as_deref(),
-                    &resource.name(),
-                )
-                .await?;
+                let _ = crate::delete::delete::<K>(&client, resource.namespace().as_deref(), &resource.name()).await;
+                api.create(&Default::default(), &resource).await?;
             }
         }
         Ok(())
