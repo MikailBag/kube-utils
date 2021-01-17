@@ -8,7 +8,7 @@ use k8s_openapi::{
         core::v1::{PersistentVolume, PersistentVolumeClaim},
         storage::v1::StorageClass,
     },
-    apimachinery::pkg::apis::meta::v1::LabelSelector,
+    apimachinery::pkg::{apis::meta::v1::LabelSelector, api::resource::Quantity},
 };
 use kube::{
     api::{Meta, ObjectMeta},
@@ -105,7 +105,7 @@ async fn reconciler<P: Provision>(
     };
 
     // TODO
-    let _volume_size = pvc
+    let volume_size = pvc
         .spec
         .as_ref()
         .and_then(|spec| spec.resources.as_ref())
@@ -155,7 +155,11 @@ async fn reconciler<P: Provision>(
     pv.access_modes = Some(access_modes.into_iter().map(|x| x.to_string()).collect());
     pv.claim_ref = Some(make_obj_ref(&pvc));
     pv.volume_mode = Some(volume_mode.to_string());
-
+    {
+        let mut resources = BTreeMap::new();
+        resources.insert("storage".to_string(), Quantity(volume_size.unwrap_or("1Ki").to_string()));
+        pv.capacity = Some(resources);
+    }
     let mut pv_annotaions = provision.annotations.clone();
     pv_annotaions.insert(
         "pv.kubernetes.io/provisioned-by".to_string(),
