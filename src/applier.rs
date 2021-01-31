@@ -1,5 +1,5 @@
 use kube::{
-    api::{Meta, ObjectMeta, PatchParams},
+    api::{Meta, ObjectMeta, Patch, PatchParams},
     Api,
 };
 /// Defines how exactly resources should be applied
@@ -53,12 +53,17 @@ impl Applier {
                 api.patch(
                     &resource.name(),
                     &PatchParams::apply(field_manager),
-                    serde_json::to_vec(&resource)?,
+                    &Patch::Apply(resource),
                 )
                 .await?;
             }
             Strategy::Overwrite => {
-                let _ = crate::delete::delete::<K>(&client, resource.namespace().as_deref(), &resource.name()).await;
+                let _ = crate::delete::delete::<K>(
+                    &client,
+                    resource.namespace().as_deref(),
+                    &resource.name(),
+                )
+                .await;
                 api.create(&Default::default(), &resource).await?;
             }
         }
