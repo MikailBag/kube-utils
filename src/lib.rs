@@ -1,17 +1,18 @@
 pub mod applier;
+pub mod crds;
 pub mod delete;
+pub mod errors;
 pub mod health;
+pub mod kubeconfig;
+pub mod lock;
+pub mod pods;
 pub mod storage;
 pub mod wait;
 pub mod webhook;
-pub mod pods;
-pub mod crds;
-pub mod kubeconfig;
-
-use std::fmt::Debug;
 
 use anyhow::Context as _;
 use kube::Api;
+use std::fmt::Debug;
 
 pub async fn patch_with<K, F, Fut>(
     client: kube::Client,

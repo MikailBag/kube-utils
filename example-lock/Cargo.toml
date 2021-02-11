@@ -1,0 +1,15 @@
+[package]
+name = "example-lock"
+version = "0.1.0"
+authors = ["Mikail Bagishov <bagishov.mikail@yandex.ru>"]
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.40"
+k8s-openapi = { version = "0.11.0", features = ["v1_19"] }
+kube = "0.52.0"
+kube-utils = { path = ".."}
+serde_json = "1.0.64"
+tokio = { version = "1.5.0", features = ["macros", "rt-multi-thread", "process"] }
+tracing = "0.1.25"
+tracing-subscriber = "0.2.17"

@@ -1,3 +1,6 @@
+[workspace]
+members = ["example-lock"]
+
 [package]
 name = "kube-utils"
 version = "0.1.0"
@@ -13,6 +16,7 @@ json-patch = "0.2.6"
 k8s-openapi = "0.11.0"
 kube = { version = "0.52.0", features = ["ws"] }
 kube-runtime = "0.52.0"
+rand = "0.8.3"
 serde = "1.0.125"
 serde_json = "1.0.64"
 serde_yaml = "0.8.17"
@@ -22,7 +26,7 @@ tokio-stream = "0.1.5"
 tokio-util = "0.6.6"
 tracing = "0.1.25"
 tracing-futures = "0.2.5"
-uuid = { version = "0.8.2", features = ["v4"] }
+uuid = { version = "0.8.2", features = ["v4", "serde"] }
 
 [dev-dependencies]
 
