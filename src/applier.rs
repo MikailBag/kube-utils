@@ -39,15 +39,15 @@ impl Applier {
         &self,
         resource: &K,
         api: Api<K>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<K> {
         let repr = serde_yaml::to_string(&resource)?;
         println!("{}", repr);
 
         let client = api.clone().into_client();
 
-        match &self.strategy {
+        let created = match &self.strategy {
             Strategy::Create => {
-                api.create(&Default::default(), resource).await?;
+                api.create(&Default::default(), resource).await?
             }
             Strategy::Apply { field_manager } => {
                 api.patch(
@@ -55,7 +55,7 @@ impl Applier {
                     &PatchParams::apply(field_manager),
                     &Patch::Apply(resource),
                 )
-                .await?;
+                .await?
             }
             Strategy::Overwrite => {
                 let _ = crate::delete::delete::<K>(
@@ -64,10 +64,10 @@ impl Applier {
                     &resource.name(),
                 )
                 .await;
-                api.create(&Default::default(), &resource).await?;
+                api.create(&Default::default(), &resource).await?
             }
-        }
-        Ok(())
+        };
+        Ok(created)
     }
 
     /// Applies a resource
@@ -80,7 +80,7 @@ impl Applier {
     >(
         &self,
         mut resource: K,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<K> {
         let meta = resource.metadata_mut();
         let ns = meta
             .namespace
@@ -101,7 +101,7 @@ impl Applier {
     >(
         &self,
         resource: K,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<K> {
         let api = Api::all(self.client.clone());
         self.do_apply(&resource, api).await
     }
