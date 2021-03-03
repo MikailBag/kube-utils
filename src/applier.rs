@@ -1,7 +1,9 @@
+use anyhow::Context;
 use kube::{
     api::{Meta, ObjectMeta, Patch, PatchParams},
     Api,
 };
+
 /// Defines how exactly resources should be applied
 pub enum Strategy {
     /// Return an error if resource with the same name already exists
@@ -46,9 +48,7 @@ impl Applier {
         let client = api.clone().into_client();
 
         let created = match &self.strategy {
-            Strategy::Create => {
-                api.create(&Default::default(), resource).await?
-            }
+            Strategy::Create => api.create(&Default::default(), resource).await?,
             Strategy::Apply { field_manager } => {
                 api.patch(
                     &resource.name(),
@@ -58,12 +58,13 @@ impl Applier {
                 .await?
             }
             Strategy::Overwrite => {
-                let _ = crate::delete::delete::<K>(
-                    &client,
-                    resource.namespace().as_deref(),
-                    &resource.name(),
-                )
-                .await;
+                let name = resource
+                    .meta()
+                    .name
+                    .clone()
+                    .context("name must be set when Overwrite strategy is in use")?;
+                let _ = crate::delete::delete::<K>(&client, resource.namespace().as_deref(), &name)
+                    .await;
                 api.create(&Default::default(), &resource).await?
             }
         };
