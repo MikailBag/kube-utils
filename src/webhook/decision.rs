@@ -138,7 +138,7 @@ impl Decision {
         match res {
             Ok(ok) => {
                 let dec = ok.make_decision();
-                assert!(matches!(dec.0, Choice::Allow {..}));
+                assert!(matches!(dec.0, Choice::Allow { .. }));
                 Ok(dec)
             }
             Err(err) => match err.downcast::<Rejection>() {
