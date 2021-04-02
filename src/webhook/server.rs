@@ -1,15 +1,18 @@
+use super::Rejection;
 use crate::webhook::{
     apis::{AdmissionReviewRequest, AdmissionReviewResponse, Status},
     Decision,
 };
-use k8s_openapi::Resource;
-
-use super::Rejection;
+use kube::api::Resource;
+use std::borrow::Cow;
 
 /// Type that is able to review admission requests
 pub trait Review: Send + Sync + 'static {
     /// Resource to review
-    type Resource: kube::api::Meta + serde::ser::Serialize + serde::de::DeserializeOwned + Clone;
+    type Resource: kube::api::Resource<DynamicType = ()>
+        + serde::ser::Serialize
+        + serde::de::DeserializeOwned
+        + Clone;
 
     /// Review a resource.
     /// # Errors
@@ -19,20 +22,20 @@ pub trait Review: Send + Sync + 'static {
 }
 
 trait DynReview {
-    fn api_version(&self) -> &'static str;
-    fn kind(&self) -> &'static str;
+    fn api_version(&self) -> Cow<'static, str>;
+    fn kind(&self) -> Cow<'static, str>;
 
     fn review(&self, resource: &serde_json::Value) -> anyhow::Result<serde_json::Value>;
 }
 
 struct DynReviewer<R: Review>(R);
 impl<R: Review> DynReview for DynReviewer<R> {
-    fn api_version(&self) -> &'static str {
-        R::Resource::API_VERSION
+    fn api_version(&self) -> Cow<'static, str> {
+        R::Resource::api_version(&())
     }
 
-    fn kind(&self) -> &'static str {
-        R::Resource::KIND
+    fn kind(&self) -> Cow<'static, str> {
+        R::Resource::api_version(&())
     }
 
     fn review(&self, resource: &serde_json::Value) -> anyhow::Result<serde_json::Value> {
@@ -131,7 +134,7 @@ impl ServerBuilder {
         let new = DynReviewer::<R>(reviewer);
         if self
             .0
-            .find_reviewer(new.api_version(), new.kind())
+            .find_reviewer(&*new.api_version(), &*new.kind())
             .is_some()
         {
             panic!(

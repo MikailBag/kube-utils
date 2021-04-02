@@ -1,8 +1,9 @@
 use anyhow::Context;
 use kube::{
-    api::{Meta, ObjectMeta, Patch, PatchParams},
+    api::{ObjectMeta, Patch, PatchParams, Resource},
     Api,
 };
+use std::fmt::Debug;
 
 /// Defines how exactly resources should be applied
 pub enum Strategy {
@@ -32,9 +33,10 @@ impl Applier {
     }
 
     pub async fn do_apply<
-        K: Meta
+        K: Resource<DynamicType = ()>
             + k8s_openapi::Metadata<Ty = ObjectMeta>
             + Clone
+            + Debug
             + serde::de::DeserializeOwned
             + serde::Serialize,
     >(
@@ -73,9 +75,10 @@ impl Applier {
 
     /// Applies a resource
     pub async fn apply<
-        K: kube::api::Meta
+        K: kube::api::Resource<DynamicType = ()>
             + k8s_openapi::Metadata<Ty = ObjectMeta>
             + Clone
+            + Debug
             + serde::de::DeserializeOwned
             + serde::Serialize,
     >(
@@ -94,9 +97,10 @@ impl Applier {
 
     /// Applies a cluster-scoped resource
     pub async fn apply_global<
-        K: kube::api::Meta
+        K: kube::api::Resource<DynamicType = ()>
             + k8s_openapi::Metadata<Ty = ObjectMeta>
             + Clone
+            + Debug
             + serde::de::DeserializeOwned
             + serde::Serialize,
     >(

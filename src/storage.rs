@@ -14,7 +14,7 @@ use k8s_openapi::{
     apimachinery::pkg::apis::meta::v1::{LabelSelector, MicroTime, Time},
 };
 use kube::{
-    api::{Meta, ObjectMeta},
+    api::{ObjectMeta, Resource},
     Api,
 };
 use kube_runtime::{
@@ -103,7 +103,11 @@ pub enum EventType {
     Warning,
 }
 
-async fn do_report_error<K: Meta>(k: &kube::Client, ev: &Event, obj: &K) -> anyhow::Result<()> {
+async fn do_report_error<K: Resource<DynamicType = ()>>(
+    k: &kube::Client,
+    ev: &Event,
+    obj: &K,
+) -> anyhow::Result<()> {
     let now = chrono::Utc::now();
     let event_type = match &ev.ty {
         EventType::Normal => "Normal",
@@ -141,16 +145,16 @@ async fn do_report_error<K: Meta>(k: &kube::Client, ev: &Event, obj: &K) -> anyh
     Ok(())
 }
 
-async fn report_error<K: Meta>(k: &kube::Client, ev: &Event, obj: &K) {
+async fn report_error<K: Resource<DynamicType = ()>>(k: &kube::Client, ev: &Event, obj: &K) {
     if let Err(e) = do_report_error::<K>(k, ev, obj).await {
         tracing::warn!("Failed to send an event: {:#}", e);
     }
 }
 
-fn make_obj_ref<K: Meta>(obj: &K) -> ObjectReference {
+fn make_obj_ref<K: Resource<DynamicType = ()>>(obj: &K) -> ObjectReference {
     ObjectReference {
-        api_version: Some(K::API_VERSION.to_string()),
-        kind: Some(K::KIND.to_string()),
+        api_version: Some(K::api_version(&()).to_string()),
+        kind: Some(K::kind(&()).to_string()),
         name: Some(obj.name()),
         namespace: obj.namespace(),
         resource_version: obj.resource_ver(),

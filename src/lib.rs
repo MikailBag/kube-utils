@@ -5,6 +5,8 @@ pub mod storage;
 pub mod wait;
 pub mod webhook;
 
+use std::fmt::Debug;
+
 use anyhow::Context as _;
 use kube::Api;
 
@@ -20,7 +22,8 @@ where
         + serde::Serialize
         + serde::de::DeserializeOwned
         + Clone
-        + kube::api::Meta,
+        + Debug
+        + kube::api::Resource<DynamicType = ()>,
     F: FnMut(K) -> Fut,
     Fut: std::future::Future<Output = anyhow::Result<K>>,
 {
@@ -46,7 +49,13 @@ where
 }
 
 pub fn make_reflector<
-    K: kube::api::Meta + Clone + Send + Sync + serde::de::DeserializeOwned + 'static,
+    K: kube::api::Resource<DynamicType = ()>
+        + Clone
+        + Debug
+        + Send
+        + Sync
+        + serde::de::DeserializeOwned
+        + 'static,
 >(
     api: kube::Api<K>,
     cancel: tokio_util::sync::CancellationToken,

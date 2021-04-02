@@ -2,6 +2,7 @@ use anyhow::Context as _;
 use futures_util::StreamExt;
 use kube::Api;
 use kube_runtime::watcher::Event;
+use std::fmt::Debug;
 
 pub enum CallbackResponse<T> {
     /// Finish waiting
@@ -43,8 +44,9 @@ where
 }
 
 pub async fn wait<
-    K: kube::api::Meta
+    K: kube::api::Resource<DynamicType = ()>
         + Clone
+        + Debug
         + serde::de::DeserializeOwned
         + serde::Serialize
         + Send

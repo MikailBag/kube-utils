@@ -1,13 +1,15 @@
 use anyhow::Context as _;
 use kube::{api::WatchEvent, Api};
+use std::fmt::Debug;
 use tokio_stream::StreamExt;
 
 pub async fn delete<
-    K: kube::api::Meta
+    K: kube::api::Resource<DynamicType = ()>
         + k8s_openapi::Metadata<Ty = kube::api::ObjectMeta>
         + serde::Serialize
         + serde::de::DeserializeOwned
-        + Clone,
+        + Clone
+        + Debug,
 >(
     k: &kube::Client,
     ns: Option<&str>,
@@ -48,18 +50,17 @@ pub async fn delete<
 }
 
 async fn do_watch<
-    K: kube::api::Meta
+    K: kube::api::Resource
         + k8s_openapi::Metadata<Ty = kube::api::ObjectMeta>
         + serde::Serialize
         + serde::de::DeserializeOwned
-        + Clone,
+        + Clone
+        + Debug,
 >(
     api: &Api<K>,
     name: &str,
 ) -> anyhow::Result<()> {
-    let watch = api
-        .watch(&kube::api::ListParams::default().allow_bookmarks(), "0")
-        .await?;
+    let watch = api.watch(&kube::api::ListParams::default(), "0").await?;
     tokio::pin!(watch);
     while let Some(item) = watch.next().await {
         if let Ok(watch_event) = item {
