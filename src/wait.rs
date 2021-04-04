@@ -1,5 +1,5 @@
 use anyhow::Context as _;
-use futures_util::StreamExt;
+use futures::{future::BoxFuture, stream::StreamExt};
 use kube::Api;
 use kube_runtime::watcher::Event;
 use std::fmt::Debug;
@@ -16,7 +16,7 @@ pub trait Callback<K> {
     fn exec(
         &mut self,
         value: &K,
-    ) -> futures_util::future::BoxFuture<'static, anyhow::Result<CallbackResponse<Self::Break>>>;
+    ) -> BoxFuture<'static, anyhow::Result<CallbackResponse<Self::Break>>>;
 }
 
 pub struct CallbackFn<F>(F);
@@ -30,7 +30,7 @@ where
     fn exec(
         &mut self,
         value: &K,
-    ) -> futures_util::future::BoxFuture<'static, anyhow::Result<CallbackResponse<Self::Break>>>
+    ) -> BoxFuture<'static, anyhow::Result<CallbackResponse<Self::Break>>>
     {
         Box::pin((self.0)(value))
     }

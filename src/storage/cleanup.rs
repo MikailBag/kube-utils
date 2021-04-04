@@ -1,5 +1,5 @@
 use crate::storage::{error_policy, report_error, ContextData, Event, EventType, Provision};
-use futures_util::StreamExt;
+use futures::stream::StreamExt;
 use k8s_openapi::api::core::v1::PersistentVolume;
 use kube::{
     api::{ListParams, Resource},

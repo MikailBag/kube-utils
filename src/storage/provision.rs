@@ -2,7 +2,7 @@ use crate::storage::{
     error_policy, make_obj_ref, report_error, AccessMode, ContextData, Event, EventType,
     FromLabelSelector, FromParameters, Provision, ProvisionedVolume, VolumeMode,
 };
-use futures_util::StreamExt;
+use futures::stream::StreamExt;
 use k8s_openapi::{
     api::{
         core::v1::{PersistentVolume, PersistentVolumeClaim},

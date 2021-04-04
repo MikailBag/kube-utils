@@ -3,7 +3,7 @@ mod cleanup;
 mod provision;
 
 use anyhow::Context as _;
-use futures_util::future::BoxFuture;
+use futures::future::BoxFuture;
 use k8s_openapi::{
     api::{
         core::v1::{
@@ -218,7 +218,7 @@ pub trait Provision: Send + Sync + 'static {
         params: Self::Parameters,
         volume_mode: VolumeMode,
         access_modes: &[AccessMode],
-    ) -> futures_util::future::BoxFuture<'static, anyhow::Result<ProvisionedVolume>>;
+    ) -> BoxFuture<'static, anyhow::Result<ProvisionedVolume>>;
     /// Function thet deletes provisioned volume.
     /// It should only release underlying resources. PV will be deleted
     /// automatically.

@@ -4,6 +4,7 @@ pub mod health;
 pub mod storage;
 pub mod wait;
 pub mod webhook;
+pub mod pods;
 
 use std::fmt::Debug;
 
@@ -66,7 +67,7 @@ pub fn make_reflector<
     let reflector = kube_runtime::reflector::reflector(writer, watcher);
     let fut = async move {
         tokio::pin!(reflector);
-        while let Some(item) = futures_util::StreamExt::next(&mut reflector).await {
+        while let Some(item) = futures::stream::StreamExt::next(&mut reflector).await {
             if let Err(e) = item {
                 tracing::warn!("reflection: error: {}", e);
             }
