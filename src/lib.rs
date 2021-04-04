@@ -5,6 +5,7 @@ pub mod storage;
 pub mod wait;
 pub mod webhook;
 pub mod pods;
+pub mod crds;
 
 use std::fmt::Debug;
 
