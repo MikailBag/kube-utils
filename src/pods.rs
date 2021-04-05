@@ -1,11 +1,12 @@
-use crate::{applier::{Applier, Strategy}, wait::CallbackResponse};
+use crate::{
+    applier::{Applier, Strategy},
+};
 use anyhow::Context as _;
 use k8s_openapi::api::core::v1::{
     Container, HostPathVolumeSource, Pod, PodSpec, Volume, VolumeMount,
 };
 use kube::api::{Api, ObjectMeta, Resource};
 use std::{collections::BTreeMap, time::Duration};
-use futures::future::FutureExt;
 
 pub enum ExecTarget {
     /// A control plane node
@@ -109,8 +110,8 @@ pub async fn exec(
 
     crate::wait::wait(
         k,
-        &mut crate::wait::callback_fn(pod_is_started),
-        params.namespace.as_str(),
+        &mut crate::wait::simple_callback_fn(pod_is_started),
+        Some(params.namespace.as_str()),
         &pod.name(),
         params.timeout,
     )
@@ -127,25 +128,12 @@ pub async fn exec(
     Ok((pod, process))
 }
 
-fn pod_is_started_inner(pod: &Pod) -> bool {
+fn pod_is_started(pod: &Pod) -> Option<()> {
     pod.status
         .as_ref()
         .and_then(|status| status.container_statuses.as_ref())
         .and_then(|statuses| statuses.get(0))
         .and_then(|status| status.state.as_ref())
-        .map_or(false, |state| state.running.is_some())
-}
-
-fn pod_is_started(
-    pod: &Pod,
-) -> futures::future::BoxFuture<'static, anyhow::Result<CallbackResponse<()>>> {
-    let res = pod_is_started_inner(pod);
-    async move {
-        if res {
-            Ok(CallbackResponse::Break(()))
-        } else {
-            Ok(CallbackResponse::Continue)
-        }
-    }
-    .boxed()
+        .and_then(|state| state.running.as_ref())
+        .map(drop)
 }
