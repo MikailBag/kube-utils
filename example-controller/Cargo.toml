@@ -1,0 +1,12 @@
+[package]
+name = "example-controller"
+version = "0.1.0"
+authors = ["Mikail Bagishov <bagishov.mikail@yandex.ru>"]
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.40"
+async-trait = "0.1.48"
+kube-utils = { path = ".." }
+tokio = { version = "1.4.0", features = ["rt-multi-thread", "macros"] }
+tracing-subscriber = "0.2.17"

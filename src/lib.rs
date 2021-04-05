@@ -10,8 +10,8 @@ pub mod pods;
 pub mod storage;
 pub mod wait;
 pub mod webhook;
+pub mod controller;
 
-use anyhow::Context as _;
 use kube::Api;
 use std::fmt::Debug;
 
