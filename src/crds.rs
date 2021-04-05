@@ -31,7 +31,7 @@ impl std::fmt::Display for SubsetCheckFailedError {
                 write!(f, ";")?;
             }
             write!(f, "incompatible versions:")?;
-            for v in &self.0.missing_versions {
+            for v in &self.0.incompatible_versions {
                 write!(f, " {}", v)?;
             }
         }

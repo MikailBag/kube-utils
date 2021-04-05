@@ -1,6 +1,9 @@
 use futures::stream::StreamExt;
-use kube::api::{Api, ApiResource, DynamicObject, Resource};
-use kube_runtime::{reflector::store::Writer, watcher::Event};
+use kube::api::{Api, ApiResource, DynamicObject};
+use kube_runtime::{
+    reflector::{store::Writer, Store},
+    watcher::Event,
+};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tracing::Instrument;
@@ -8,7 +11,7 @@ use tracing::Instrument;
 const WATCH_CHANNEL_CAPACITY: usize = 16;
 
 struct WatchData {
-    cache: Writer<DynamicObject>,
+    state_writer: Writer<DynamicObject>,
     subscribers: Vec<mpsc::Sender<Arc<DynamicObject>>>,
     sweep_on_next_iteration: bool,
 }
@@ -48,7 +51,7 @@ impl WatchData {
     async fn on_event(&mut self, ev: Event<DynamicObject>) {
         // at first we deliver event to cache, and then notify
         // watchers
-        self.cache.apply_watcher_event(&ev);
+        self.state_writer.apply_watcher_event(&ev);
         for item in ev.into_iter_applied() {
             self.send_item(Arc::new(item)).await;
         }
@@ -59,6 +62,7 @@ impl WatchData {
 pub struct WatcherSet {
     client: kube::Client,
     data: RwLock<HashMap<ApiResource, Arc<Mutex<WatchData>>>>,
+    cache: RwLock<HashMap<ApiResource, Store<DynamicObject>>>,
 }
 
 pub struct Watcher {
@@ -84,7 +88,7 @@ async fn background_watcher(wd: Arc<Mutex<WatchData>>, client: kube::Client, res
     while let Some(ev) = watch.next().await {
         match ev {
             Ok(ev) => {
-                tracing::debug!(event = ?ev, "delivering event");
+                tracing::trace!(event = ?ev, "delivering event");
                 let mut wd = wd.lock().await;
                 wd.on_event(ev).await;
             }
@@ -97,16 +101,24 @@ async fn background_watcher(wd: Arc<Mutex<WatchData>>, client: kube::Client, res
 }
 
 impl WatcherSet {
-    pub async fn watch_raw(&self, res: &ApiResource) -> Watcher {
+    pub fn new(client: kube::Client) -> Self {
+        WatcherSet {
+            client,
+            data: RwLock::new(HashMap::new()),
+            cache: RwLock::new(HashMap::new()),
+        }
+    }
+
+    pub async fn watch(&self, res: &ApiResource) -> Watcher {
         let mut data = self.data.write().await;
         let watch_data = match data.get_mut(&res) {
             Some(wd) => wd,
             None => {
-                let cache = Writer::new(res.clone());
+                let state_writer = Writer::new(res.clone());
                 let wd = WatchData {
                     sweep_on_next_iteration: false,
                     subscribers: Vec::new(),
-                    cache,
+                    state_writer,
                 };
                 let wd = Arc::new(Mutex::new(wd));
                 data.insert(res.clone(), wd.clone());
@@ -119,11 +131,31 @@ impl WatcherSet {
         let mut watch_data = watch_data.lock().await;
         let (tx, rx) = mpsc::channel(WATCH_CHANNEL_CAPACITY);
         watch_data.subscribers.push(tx);
-        let initial = watch_data.cache.as_reader().state();
+        let initial = watch_data.state_writer.as_reader().state();
         Watcher { rx, initial }
     }
 
-    pub async fn watch<K: Resource<DynamicType = ()>>(&self) -> Watcher {
-        self.watch_raw(&ApiResource::erase::<K>(&())).await
+    pub async fn local_store(&self, res: &ApiResource) -> Option<Store<DynamicObject>> {
+        {
+            let cached_store = self.cache.read().await;
+            let cached_store = cached_store.get(res);
+            if let Some(store) = cached_store {
+                return Some(store.clone());
+            }
+        }
+        let store = {
+            let data = self.data.read().await;
+            let data = data.get(res)?;
+            let data = data.lock().await;
+            data.state_writer.as_reader()
+        };
+        {
+            // race condition is possible here, but it's harmless
+            let mut cache = self.cache.write().await;
+            if !cache.contains_key(res) {
+                cache.insert(res.clone(), store.clone());
+            }
+        }
+        Some(store)
     }
 }

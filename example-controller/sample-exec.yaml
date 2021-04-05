@@ -1,0 +1,17 @@
+apiVersion: example.io/v1
+kind: Exec
+metadata:
+  name: py
+spec:
+  code: |
+    print(2 + 2)
+  language: python3
+---
+apiVersion: example.io/v1
+kind: Exec
+metadata:
+  name: js
+spec:
+  code: |
+    console.log(2 + 2)
+  language: javascript

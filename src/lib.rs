@@ -1,4 +1,6 @@
 pub mod applier;
+pub mod builder;
+pub mod controller;
 pub mod crds;
 pub mod delete;
 pub mod errors;
