@@ -6,6 +6,7 @@ pub mod wait;
 pub mod webhook;
 pub mod pods;
 pub mod crds;
+pub mod kubeconfig;
 
 use std::fmt::Debug;
 
