@@ -5,6 +5,7 @@ pub mod errors;
 pub mod health;
 pub mod kubeconfig;
 pub mod lock;
+pub mod multiwatch;
 pub mod pods;
 pub mod storage;
 pub mod wait;
