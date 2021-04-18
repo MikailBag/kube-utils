@@ -2,7 +2,7 @@ use crate::storage::{error_policy, report_error, ContextData, Event, EventType, 
 use futures::stream::StreamExt;
 use k8s_openapi::api::core::v1::PersistentVolume;
 use kube::{
-    api::{ListParams, Resource},
+    api::{ListParams, ResourceExt},
     Api,
 };
 use kube_runtime::controller::{Context, Controller, ReconcilerAction};

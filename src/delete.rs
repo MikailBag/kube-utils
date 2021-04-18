@@ -5,7 +5,6 @@ use tokio_stream::StreamExt;
 
 pub async fn delete<
     K: kube::api::Resource<DynamicType = ()>
-        + k8s_openapi::Metadata<Ty = kube::api::ObjectMeta>
         + serde::Serialize
         + serde::de::DeserializeOwned
         + Clone
@@ -37,7 +36,7 @@ pub async fn delete<
     for _ in 0..60 {
         let res = api.get(name).await;
         let gone = match res {
-            Ok(obj) => obj.metadata().uid != original_object.metadata().uid,
+            Ok(obj) => obj.meta().uid != original_object.meta().uid,
             Err(_) => true,
         };
         if gone {
@@ -50,12 +49,7 @@ pub async fn delete<
 }
 
 async fn do_watch<
-    K: kube::api::Resource
-        + k8s_openapi::Metadata<Ty = kube::api::ObjectMeta>
-        + serde::Serialize
-        + serde::de::DeserializeOwned
-        + Clone
-        + Debug,
+    K: kube::api::Resource + serde::Serialize + serde::de::DeserializeOwned + Clone + Debug,
 >(
     api: &Api<K>,
     name: &str,
@@ -66,7 +60,7 @@ async fn do_watch<
         if let Ok(watch_event) = item {
             match watch_event {
                 WatchEvent::Modified(obj) | WatchEvent::Deleted(obj) => {
-                    let meta = obj.metadata();
+                    let meta = obj.meta();
                     if meta.name.as_deref().context("missing name")? != name {
                         continue;
                     }

@@ -11,7 +11,7 @@ use k8s_openapi::{
     apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::LabelSelector},
 };
 use kube::{
-    api::{ObjectMeta, Resource},
+    api::{ObjectMeta, ResourceExt},
     Api,
 };
 use kube_runtime::{

@@ -14,7 +14,7 @@ use k8s_openapi::{
     apimachinery::pkg::apis::meta::v1::{LabelSelector, MicroTime, Time},
 };
 use kube::{
-    api::{ObjectMeta, Resource},
+    api::{ObjectMeta, Resource, ResourceExt},
     Api,
 };
 use kube_runtime::{
@@ -157,7 +157,7 @@ fn make_obj_ref<K: Resource<DynamicType = ()>>(obj: &K) -> ObjectReference {
         kind: Some(K::kind(&()).to_string()),
         name: Some(obj.name()),
         namespace: obj.namespace(),
-        resource_version: obj.resource_ver(),
+        resource_version: obj.resource_version(),
         uid: obj.meta().uid.clone(),
         field_path: None,
     }

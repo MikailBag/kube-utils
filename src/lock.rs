@@ -10,7 +10,7 @@ use k8s_openapi::{
     apimachinery::pkg::apis::meta::v1::MicroTime,
 };
 use kube::{
-    api::{DeleteParams, ObjectMeta, PostParams, Preconditions, Resource},
+    api::{DeleteParams, ObjectMeta, PostParams, Preconditions, ResourceExt},
     Api,
 };
 use rand::distributions::Distribution;

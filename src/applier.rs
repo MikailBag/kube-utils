@@ -1,6 +1,6 @@
 use anyhow::Context;
 use kube::{
-    api::{ObjectMeta, Patch, PatchParams, Resource},
+    api::{Patch, PatchParams, Resource, ResourceExt},
     Api,
 };
 use std::fmt::Debug;
@@ -33,12 +33,7 @@ impl Applier {
     }
 
     pub async fn do_apply<
-        K: Resource<DynamicType = ()>
-            + k8s_openapi::Metadata<Ty = ObjectMeta>
-            + Clone
-            + Debug
-            + serde::de::DeserializeOwned
-            + serde::Serialize,
+        K: Resource<DynamicType = ()> + Clone + Debug + serde::de::DeserializeOwned + serde::Serialize,
     >(
         &self,
         resource: &K,
@@ -76,7 +71,6 @@ impl Applier {
     /// Applies a resource
     pub async fn apply<
         K: kube::api::Resource<DynamicType = ()>
-            + k8s_openapi::Metadata<Ty = ObjectMeta>
             + Clone
             + Debug
             + serde::de::DeserializeOwned
@@ -85,7 +79,7 @@ impl Applier {
         &self,
         mut resource: K,
     ) -> anyhow::Result<K> {
-        let meta = resource.metadata_mut();
+        let meta = resource.meta_mut();
         let ns = meta
             .namespace
             .get_or_insert_with(|| self.default_namespace.clone())
@@ -98,7 +92,6 @@ impl Applier {
     /// Applies a cluster-scoped resource
     pub async fn apply_global<
         K: kube::api::Resource<DynamicType = ()>
-            + k8s_openapi::Metadata<Ty = ObjectMeta>
             + Clone
             + Debug
             + serde::de::DeserializeOwned

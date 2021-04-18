@@ -1,11 +1,9 @@
-use crate::{
-    applier::{Applier, Strategy},
-};
+use crate::applier::{Applier, Strategy};
 use anyhow::Context as _;
 use k8s_openapi::api::core::v1::{
     Container, HostPathVolumeSource, Pod, PodSpec, Volume, VolumeMount,
 };
-use kube::api::{Api, ObjectMeta, Resource};
+use kube::api::{Api, ObjectMeta, ResourceExt};
 use std::{collections::BTreeMap, time::Duration};
 
 pub enum ExecTarget {

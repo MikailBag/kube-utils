@@ -21,9 +21,7 @@ pub async fn patch_with<K, F, Fut>(
     name: &str,
 ) -> anyhow::Result<()>
 where
-    K: k8s_openapi::Resource
-        + k8s_openapi::Metadata<Ty = kube::api::ObjectMeta>
-        + serde::Serialize
+    K: serde::Serialize
         + serde::de::DeserializeOwned
         + Clone
         + Debug
@@ -40,13 +38,13 @@ where
         .await
         .context("failed to get current resource")?;
     let resource_version = current
-        .metadata()
+        .meta()
         .resource_version
         .as_ref()
         .context("missing resourceVersion")?
         .clone();
     let mut new = func(current).await.context("patch callback failed")?;
-    new.metadata_mut().resource_version = Some(resource_version);
+    new.meta_mut().resource_version = Some(resource_version);
 
     api.replace(name, &Default::default(), &new).await?;
     Ok(())

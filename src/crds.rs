@@ -103,8 +103,13 @@ pub async fn verify_compatible(
         .as_deref()
         .context("missing name on CRD")?;
     let crds_api = Api::<CustomResourceDefinition>::all(k.clone());
-    let remote = crds_api.get(name).await.context("failed to fetch CRD deployed in cluster")?;
+    let remote = crds_api
+        .get(name)
+        .await
+        .context("failed to fetch CRD deployed in cluster")?;
     let report = is_subset_of(local, &remote, allow_deprecated_removal);
-    report.into_result().context("Deployed CRD is incompatible with local")?;
+    report
+        .into_result()
+        .context("Deployed CRD is incompatible with local")?;
     Ok(())
 }
