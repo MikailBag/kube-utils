@@ -8,6 +8,10 @@ pub(super) enum Args {
     List,
     /// Run controllers
     Run(Run),
+    /// Print custom resources
+    PrintCustomResources,
+    /// Apply custom resources to cluster
+    ApplyCustomResources,
 }
 
 #[derive(Clap, Debug)]

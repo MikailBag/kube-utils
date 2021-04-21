@@ -1,0 +1,8 @@
+apiVersion: example.io/v1
+kind: Exec
+metadata:
+  generateName: foo-
+spec:
+  code: |
+    print(2 + 2)
+  language: python3

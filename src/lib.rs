@@ -1,4 +1,5 @@
 pub mod applier;
+pub mod controller;
 pub mod crds;
 pub mod delete;
 pub mod errors;
@@ -10,8 +11,9 @@ pub mod pods;
 pub mod storage;
 pub mod wait;
 pub mod webhook;
-pub mod controller;
+pub mod builder;
 
+use anyhow::Context as _;
 use kube::Api;
 use std::fmt::Debug;
 

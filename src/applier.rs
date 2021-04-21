@@ -6,29 +6,56 @@ use kube::{
 use std::fmt::Debug;
 
 /// Defines how exactly resources should be applied
+#[derive(Clone)]
 pub enum Strategy {
     /// Return an error if resource with the same name already exists
     Create,
     /// Overwrite resource if it exists
     Overwrite,
-    /// Apply resource as a strategic merge patch
+    /// Apply resource using server-side apply
     Apply { field_manager: String },
 }
-/// Utility for creating objects of different types in cluster
 
+/// Hook observes each to-be-applied object
+#[derive(Clone)]
+pub struct Hook {
+    func: fn(String),
+}
+
+impl Hook {
+    pub fn print() -> Self {
+        Hook {
+            func: |repr| println!("{}", repr),
+        }
+    }
+
+    pub fn null() -> Self {
+        Hook { func: |_| () }
+    }
+}
+
+/// Utility for creating objects of different types in cluster
+#[derive(Clone)]
 pub struct Applier {
     client: kube::Client,
-    default_namespace: String,
+    default_namespace: Option<String>,
     strategy: Strategy,
+    hook: Hook,
 }
 
 impl Applier {
     /// Creates a new applier, connected to cluster
-    pub fn new(client: kube::Client, default_namespace: &str, strategy: Strategy) -> Self {
+    pub fn new(
+        client: kube::Client,
+        default_namespace: Option<&str>,
+        strategy: Strategy,
+        hook: Hook,
+    ) -> Self {
         Applier {
             client,
-            default_namespace: default_namespace.to_string(),
+            default_namespace: default_namespace.map(|s| s.to_string()),
             strategy,
+            hook,
         }
     }
 
@@ -79,11 +106,16 @@ impl Applier {
         &self,
         mut resource: K,
     ) -> anyhow::Result<K> {
-        let meta = resource.meta_mut();
-        let ns = meta
+        let ns = resource
+            .meta()
             .namespace
-            .get_or_insert_with(|| self.default_namespace.clone())
-            .clone();
+            .clone()
+            .ok_or(())
+            .or_else(|_| self.default_namespace.clone().ok_or(()))
+            .map_err(|_| {
+                anyhow::anyhow!("No namespace given and no default namespace configured")
+            })?;
+        resource.meta_mut().namespace = Some(ns.clone());
 
         let api = Api::namespaced(self.client.clone(), &ns);
         self.do_apply(&resource, api).await

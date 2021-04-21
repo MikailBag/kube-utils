@@ -1,7 +1,7 @@
-use crate::applier::{Applier, Strategy};
+use crate::applier::{Applier, Hook, Strategy};
 use anyhow::Context as _;
-use k8s_openapi::api::core::v1::{
-    Container, HostPathVolumeSource, Pod, PodSpec, Volume, VolumeMount,
+use k8s_openapi::{
+    api::core::v1::{Container, HostPathVolumeSource, Pod, PodSpec, Volume, VolumeMount},
 };
 use kube::api::{Api, ObjectMeta, ResourceExt};
 use std::{collections::BTreeMap, time::Duration};
@@ -43,7 +43,12 @@ pub async fn exec(
     k: &kube::Client,
     params: ExecParams,
 ) -> anyhow::Result<(Pod, kube::api::AttachedProcess)> {
-    let applier = Applier::new(k.clone(), &params.namespace, Strategy::Create);
+    let applier = Applier::new(
+        k.clone(),
+        Some(&params.namespace),
+        Strategy::Create,
+        Hook::null(),
+    );
 
     let mut volumes = Vec::new();
     let mut volume_mounts = Vec::new();
