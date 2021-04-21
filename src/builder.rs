@@ -47,7 +47,7 @@ impl<K: Build> Builder<K> {
     }
 
     pub fn name_prefix(&mut self, prefix: &str) -> &mut Self {
-        self.0.get_mut().meta_mut().name = Some(prefix.to_string() + "-");
+        self.0.get_mut().meta_mut().generate_name = Some(prefix.to_string() + "-");
         self
     }
 

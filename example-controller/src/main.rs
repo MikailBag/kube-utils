@@ -31,6 +31,7 @@ async fn main() -> anyhow::Result<()> {
 #[derive(CustomResource, Debug, Serialize, Deserialize, Clone, JsonSchema, Default)]
 #[kube(group = "example.io", version = "v1", kind = "Exec")]
 #[kube(status = "ExecStatus")]
+#[kube(namespaced)]
 struct ExecSpec {
     /// Code to execute. Read-only.
     #[serde(skip_serializing_if = "String::is_empty")]
