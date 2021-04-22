@@ -67,7 +67,7 @@ impl Applier {
         api: Api<K>,
     ) -> anyhow::Result<K> {
         let repr = serde_yaml::to_string(&resource)?;
-        println!("{}", repr);
+        (self.hook.func)(repr);
 
         let client = api.clone().into_client();
 
