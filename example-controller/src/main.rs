@@ -2,18 +2,18 @@ use std::str::FromStr;
 
 use anyhow::Context as _;
 use async_trait::async_trait;
-use k8s_openapi::{
-    api::{
-        core::v1::{ConfigMap, Pod},
-        rbac::v1::ClusterRole,
-    },
-    apimachinery::pkg::apis::meta::v1::OwnerReference,
+use k8s_openapi::api::{
+    core::v1::{ConfigMap, Pod},
+    rbac::v1::ClusterRole,
 };
 use kube::api::{Api, ObjectMeta, Resource, ResourceExt};
 use kube::CustomResource;
 use kube_utils::{
     builder::Builder,
-    controller::{Collect, Controller, ControllerManager, ReconcileContext, ReconcileStatus},
+    controller::{
+        make_owner_reference, Collect, Controller, ControllerManager, ReconcileContext,
+        ReconcileStatus,
+    },
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -48,21 +48,6 @@ struct ExecStatus {
     pod_name: Option<String>,
     /// Name of the configmap containing the code.
     configmap_name: Option<String>,
-}
-
-fn make_owner_ref<K: Resource>(
-    resource: &K,
-    dt: &K::DynamicType,
-    is_controller: bool,
-) -> OwnerReference {
-    OwnerReference {
-        api_version: K::api_version(dt).to_string(),
-        block_owner_deletion: None,
-        controller: Some(is_controller),
-        kind: K::kind(dt).to_string(),
-        name: resource.name(),
-        uid: resource.uid().expect("missing uid on persisted object"),
-    }
 }
 
 enum Language {
@@ -124,7 +109,7 @@ impl Controller for ExecController {
             tracing::info!("Creating configmap");
             let mut cmap = Builder::<ConfigMap>::new();
             cmap.name_prefix(&exec.name())
-                .owner(make_owner_ref(&exec, &(), true));
+                .owner(make_owner_reference(&exec, &()));
             cmap.inner().immutable();
 
             let configmaps = Api::<ConfigMap>::namespaced(
@@ -160,7 +145,7 @@ impl Controller for ExecController {
             let mut pod_builder = Builder::<Pod>::new();
             pod_builder
                 .name_prefix(&exec.name())
-                .owner(make_owner_ref(&exec, &(), true))
+                .owner(make_owner_reference(&exec, &()))
                 .inner()
                 .image(image);
 

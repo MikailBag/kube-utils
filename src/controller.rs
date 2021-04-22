@@ -11,11 +11,11 @@ use self::collect::ControllerDescriptionCollector;
 use anyhow::Context as _;
 use async_trait::async_trait;
 use futures::future::FutureExt;
-use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
-use kube::{
-    api::{Api, ApiResource, DynamicObject, Resource, ResourceExt},
-    client::Discovery,
+use k8s_openapi::{
+    apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition,
+    apimachinery::pkg::apis::meta::v1::OwnerReference,
 };
+use kube::api::{Api, ApiResource, DynamicObject, Resource, ResourceExt};
 use kube_runtime::reflector::ObjectRef;
 use serde::de::DeserializeOwned;
 use std::{sync::Arc, time::Duration};
@@ -159,8 +159,8 @@ impl ControllerManager {
             }
         };
         tokio::task::spawn(version_skew_check_fut);
-        tracing::info!("Discovering cluster APIs");
-        let discovery = Arc::new(Discovery::new(&client).await?);
+        //tracing::info!("Discovering cluster APIs");
+        //let discovery = Arc::new(Discovery::new(&client).await?);
         let watcher_set = crate::multiwatch::WatcherSet::new(client.clone());
         let watcher_set = Arc::new(watcher_set);
         let mut supervised = Vec::new();
@@ -171,8 +171,11 @@ impl ControllerManager {
                 .find(|c| c.meta.name == controller)
                 .unwrap()
                 .clone();
-            let ctl =
-                supervisor::supervise(dc, watcher_set.clone(), discovery.clone(), client.clone());
+            let ctl = supervisor::supervise(
+                dc,
+                watcher_set.clone(),
+                /*discovery.clone(),*/ client.clone(),
+            );
             supervised.push(ctl);
         }
         {
@@ -290,6 +293,28 @@ impl ReconcileContext {
         let obj = serde_json::from_str(&obj).expect("failed to parse resource");
         Some(obj)
     }
+}
+
+pub fn make_owner_reference<Owner: Resource>(
+    owner: &Owner,
+    dt: &Owner::DynamicType,
+) -> OwnerReference {
+    OwnerReference {
+        api_version: Owner::api_version(dt).to_string(),
+        block_owner_deletion: None,
+        controller: Some(true),
+        kind: Owner::kind(dt).to_string(),
+        name: owner.name(),
+        uid: owner.uid().expect("missing uid on persisted object"),
+    }
+}
+
+pub fn downcast_dynamic_object<K: Resource<DynamicType = ()> + DeserializeOwned>(
+    obj: &DynamicObject,
+) -> anyhow::Result<K> {
+    let obj = serde_json::to_value(obj)?;
+    let obj = serde_json::from_value(obj)?;
+    Ok(obj)
 }
 
 pub enum ReconcileStatus {
