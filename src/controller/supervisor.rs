@@ -71,7 +71,7 @@ pub(super) fn supervise(
             state.clone(),
             cancel.clone(),
             (dc.vtable.api_resource)(),
-            Vec::new(),
+            dc.meta.watches.clone(),
             reconcile_tx,
         );
         let cancel = cancel.clone();

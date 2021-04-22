@@ -212,6 +212,7 @@ impl ControllerManager {
 struct ControllerDescription {
     name: String,
     crd: Option<CustomResourceDefinition>,
+    watches: Vec<ApiResource>,
 }
 
 #[derive(Clone)]
