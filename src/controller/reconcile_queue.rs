@@ -1,5 +1,5 @@
 use std::{
-    collections::{BinaryHeap, HashMap},
+    collections::{binary_heap::PeekMut, BinaryHeap, HashMap},
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -22,7 +22,13 @@ pub(crate) struct TaskKey {
 
 impl ReconcilationTask {
     fn new(key: TaskKey, gen: Generation) -> Self {
-        ReconcilationTask { key, gen }
+        let span = tracing::info_span!(
+            "Reconcillation task",
+            id = gen.0,
+            object_name = key.name.as_str(),
+            object_namespace = key.namespace.as_str()
+        );
+        ReconcilationTask { key, gen, span }
     }
 }
 
@@ -140,7 +146,6 @@ impl Queue {
         }
     }
 
-    #[tracing::instrument(skip(self))]
     fn add(&mut self, task: ReconcilationTask) {
         let info = self.objects.entry(task.key.clone()).or_default();
 
@@ -150,7 +155,9 @@ impl Queue {
                 key: task.key.clone(),
             });
         } else {
-            tracing::debug!(generation = task.gen.0, key = ?task.key, "Task is throttled");
+            task.span.in_scope(|| {
+                tracing::debug!("Task is throttled");
+            });
             self.delayed.push(DelayedItem {
                 gen: task.gen,
                 key: task.key.clone(),
@@ -164,19 +171,33 @@ impl Queue {
     fn process_delays(&mut self) {
         let now = Instant::now();
         loop {
-            match self.delayed.peek() {
+            let head = match self.delayed.peek_mut() {
                 Some(head) => {
                     if head.enqueue_after > now {
                         break;
                     }
+                    head
                 }
                 None => break,
-            }
-            let ready = self
-                .delayed
-                .pop()
-                .expect("it was checked that delayed queue is non-empty");
-            tracing::debug!(generation = ready.gen.0, key = ?ready.key, "Task is now ready");
+            };
+            let ready = PeekMut::pop(head);
+            let task = self.objects.get(&ready.key).and_then(|t| t.task.as_ref());
+            let task = match task {
+                Some(t) => t,
+                None => {
+                    // While this item was in queue, object was reconciled.
+                    // Let's just throw this item away.
+                    continue;
+                }
+            };
+            task.span.in_scope(|| {
+                tracing::debug!("Task is now ready");
+            });
+            let ready = ReadyItem {
+                gen: ready.gen,
+                key: ready.key,
+            };
+            self.ready.push(ready);
         }
     }
 
@@ -205,6 +226,7 @@ impl Queue {
 struct ReconcilationTask {
     key: TaskKey,
     gen: Generation,
+    span: tracing::Span,
 }
 
 /// Can be used to send new tasks to queue.
@@ -218,7 +240,9 @@ pub(crate) struct QueueSender {
 impl QueueSender {
     pub(crate) async fn send(&self, key: TaskKey) {
         let item = ReconcilationTask::new(key, self.make_gen.next());
-        tracing::info!(generation = item.gen.0, object = ?item.key, "Enqueued task");
+        item.span.in_scope(|| {
+            tracing::info!(generation = item.gen.0, object = ?item.key, "Enqueued task");
+        });
         let mut q = self.q.lock().await;
         q.add(item);
     }

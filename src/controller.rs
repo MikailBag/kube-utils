@@ -3,13 +3,17 @@ mod collect;
 mod detector;
 mod init;
 mod reconcile_queue;
+mod reconciler;
 mod supervisor;
 mod validate_api_server;
 
-use crate::{applier::Applier, controller::reconcile_queue::QueueConfig, multiwatch::WatcherSet};
+pub use self::{
+    collect::Collect,
+    reconciler::{ReconcileContext, ReconcileStatus},
+};
 
-pub use self::collect::Collect;
 use self::collect::ControllerDescriptionCollector;
+use crate::controller::reconcile_queue::QueueConfig;
 use anyhow::Context as _;
 use async_trait::async_trait;
 use futures::future::FutureExt;
@@ -18,10 +22,8 @@ use k8s_openapi::{
     apimachinery::pkg::apis::meta::v1::OwnerReference,
 };
 use kube::api::{Api, ApiResource, DynamicObject, Resource, ResourceExt};
-use kube_runtime::reflector::ObjectRef;
 use serde::de::DeserializeOwned;
 use std::{sync::Arc, time::Duration};
-use tokio::sync::Mutex;
 
 /// Type, wrapping several controllers and providing all
 /// required infrastructure for them to work.
@@ -264,52 +266,6 @@ impl ControllerVtable {
     }
 }
 
-/// Context available to reconciler
-pub struct ReconcileContext {
-    client: kube::Client,
-    applier: Applier,
-    ws: Arc<WatcherSet>,
-    namespace: Option<String>,
-    toplevel_name: String,
-    non_owner_waits: Arc<Mutex<detector::NonOwnerWaits>>,
-}
-
-impl ReconcileContext {
-    pub fn client(&self) -> kube::Client {
-        self.client.clone()
-    }
-
-    pub fn applier(&self) -> Applier {
-        self.applier.clone()
-    }
-
-    pub async fn cached<K: Resource<DynamicType = ()> + DeserializeOwned>(
-        &self,
-        name: &str,
-    ) -> Option<K> {
-        let api_res = ApiResource::erase::<K>(&());
-        {
-            let mut waits = self.non_owner_waits.lock().await;
-            waits.register_wait(
-                api_res.clone(),
-                name.to_string(),
-                self.namespace.clone(),
-                self.toplevel_name.clone(),
-                self.namespace.clone(),
-            )
-        }
-        let store = self.ws.local_store(&api_res).await?;
-        let mut obj_ref = ObjectRef::new_with(name, api_res);
-        if let Some(ns) = self.namespace.as_deref() {
-            obj_ref = obj_ref.within(ns);
-        }
-        let obj = store.get(&obj_ref)?;
-        let obj = serde_json::to_string(&obj).expect("failed to serialize DynamicObject");
-        let obj = serde_json::from_str(&obj).expect("failed to parse resource");
-        Some(obj)
-    }
-}
-
 pub fn make_owner_reference<Owner: Resource>(
     owner: &Owner,
     dt: &Owner::DynamicType,
@@ -330,11 +286,6 @@ pub fn downcast_dynamic_object<K: Resource<DynamicType = ()> + DeserializeOwned>
     let obj = serde_json::to_value(obj)?;
     let obj = serde_json::from_value(obj)?;
     Ok(obj)
-}
-
-pub enum ReconcileStatus {
-    /// Object is fully reconciled
-    Done,
 }
 
 /// Trait, implemented by a controller
