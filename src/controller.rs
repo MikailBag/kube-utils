@@ -1,5 +1,6 @@
 mod cli;
 mod collect;
+mod detector;
 mod init;
 mod reconcile_queue;
 mod supervisor;
@@ -20,6 +21,7 @@ use kube::api::{Api, ApiResource, DynamicObject, Resource, ResourceExt};
 use kube_runtime::reflector::ObjectRef;
 use serde::de::DeserializeOwned;
 use std::{sync::Arc, time::Duration};
+use tokio::sync::Mutex;
 
 /// Type, wrapping several controllers and providing all
 /// required infrastructure for them to work.
@@ -216,7 +218,7 @@ struct ControllerDescription {
 }
 
 #[derive(Clone)]
-struct DynController {
+pub(crate) struct DynController {
     meta: ControllerDescription,
     vtable: ControllerVtable,
 }
@@ -268,6 +270,8 @@ pub struct ReconcileContext {
     applier: Applier,
     ws: Arc<WatcherSet>,
     namespace: Option<String>,
+    toplevel_name: String,
+    non_owner_waits: Arc<Mutex<detector::NonOwnerWaits>>,
 }
 
 impl ReconcileContext {
@@ -284,6 +288,16 @@ impl ReconcileContext {
         name: &str,
     ) -> Option<K> {
         let api_res = ApiResource::erase::<K>(&());
+        {
+            let mut waits = self.non_owner_waits.lock().await;
+            waits.register_wait(
+                api_res.clone(),
+                name.to_string(),
+                self.namespace.clone(),
+                self.toplevel_name.clone(),
+                self.namespace.clone(),
+            )
+        }
         let store = self.ws.local_store(&api_res).await?;
         let mut obj_ref = ObjectRef::new_with(name, api_res);
         if let Some(ns) = self.namespace.as_deref() {

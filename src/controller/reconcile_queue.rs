@@ -1,4 +1,3 @@
-use kube::api::{DynamicObject, ResourceExt};
 use std::{
     collections::{BinaryHeap, HashMap},
     sync::{
@@ -203,7 +202,7 @@ impl Queue {
 }
 
 #[derive(Debug)]
-pub(crate) struct ReconcilationTask {
+struct ReconcilationTask {
     key: TaskKey,
     gen: Generation,
 }
