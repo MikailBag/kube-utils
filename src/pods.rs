@@ -1,7 +1,7 @@
 use crate::applier::{Applier, Hook, Strategy};
 use anyhow::Context as _;
-use k8s_openapi::{
-    api::core::v1::{Container, HostPathVolumeSource, Pod, PodSpec, Volume, VolumeMount},
+use k8s_openapi::api::core::v1::{
+    Container, HostPathVolumeSource, Pod, PodSpec, Volume, VolumeMount,
 };
 use kube::api::{Api, ObjectMeta, ResourceExt};
 use std::{collections::BTreeMap, time::Duration};

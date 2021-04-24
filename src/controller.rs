@@ -1,10 +1,11 @@
 mod cli;
 mod collect;
 mod init;
+mod reconcile_queue;
 mod supervisor;
 mod validate_api_server;
 
-use crate::{applier::Applier, multiwatch::WatcherSet};
+use crate::{applier::Applier, controller::reconcile_queue::QueueConfig, multiwatch::WatcherSet};
 
 pub use self::collect::Collect;
 use self::collect::ControllerDescriptionCollector;
@@ -171,11 +172,10 @@ impl ControllerManager {
                 .find(|c| c.meta.name == controller)
                 .unwrap()
                 .clone();
-            let ctl = supervisor::supervise(
-                dc,
-                watcher_set.clone(),
-                /*discovery.clone(),*/ client.clone(),
-            );
+            let cfg = QueueConfig {
+                throttle: Duration::from_secs(3),
+            };
+            let ctl = supervisor::supervise(dc, watcher_set.clone(), client.clone(), cfg);
             supervised.push(ctl);
         }
         {

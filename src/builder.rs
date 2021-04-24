@@ -2,7 +2,7 @@ mod clusterrole;
 mod configmap;
 mod pod;
 
-pub use clusterrole::{ClusterRoleBuilder};
+pub use clusterrole::ClusterRoleBuilder;
 pub use configmap::ConfigMapBuilder;
 pub use pod::PodBuilder;
 

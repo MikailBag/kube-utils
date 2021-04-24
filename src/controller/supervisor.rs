@@ -2,15 +2,20 @@
 
 use crate::{
     applier::{Applier, Strategy},
-    controller::{DynController, ReconcileContext},
+    controller::{
+        reconcile_queue::{QueueConfig, QueueReceiver, QueueSender, TaskKey},
+        DynController, ReconcileContext,
+    },
     multiwatch::{Watcher, WatcherSet},
 };
 use core::convert::Infallible;
-use futures::lock::Mutex;
 use kube::api::{ApiResource, DynamicObject, ResourceExt};
 use kube_runtime::reflector::{ObjectRef, Store};
-use std::sync::Arc;
-use tokio::sync::mpsc;
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
+use tokio::sync::{mpsc, Mutex};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
@@ -38,16 +43,17 @@ struct SupervisorState {
 
 const NUM_WORKERS: usize = 2;
 
-#[tracing::instrument(skip(dc, ws, /*apis,*/ client), fields(controller_name = dc.meta.name.as_str()))]
+#[tracing::instrument(skip(dc, ws, client, cfg), fields(controller_name = dc.meta.name.as_str()))]
 pub(super) fn supervise(
     dc: DynController,
     ws: Arc<WatcherSet>,
-    //apis: Arc<Discovery>,
     client: kube::Client,
+    cfg: QueueConfig,
 ) -> SupervisorCtl {
     tracing::info!(
         controller = dc.meta.name.as_str(),
         workers_count = NUM_WORKERS,
+        queue_config = ?cfg,
         "Starting supervisor"
     );
 
@@ -56,14 +62,12 @@ pub(super) fn supervise(
 
     let state = SupervisorState {
         ws,
-        //apis,
         client,
         _alive: alive_tx,
     };
     let state = Arc::new(state);
 
-    let (reconcile_tx, reconcile_rx) = mpsc::channel(NUM_WORKERS);
-    let reconcile_rx = Arc::new(Mutex::new(reconcile_rx));
+    let (tx, rx) = crate::controller::reconcile_queue::queue(cfg);
 
     let detector_fut = {
         let fut = detector(
@@ -72,7 +76,7 @@ pub(super) fn supervise(
             cancel.clone(),
             (dc.vtable.api_resource)(),
             dc.meta.watches.clone(),
-            reconcile_tx,
+            tx,
         );
         let cancel = cancel.clone();
         async move {
@@ -87,7 +91,7 @@ pub(super) fn supervise(
     };
     tokio::task::spawn(detector_fut);
     for _ in 0..NUM_WORKERS {
-        tokio::task::spawn(reconciler(dc.clone(), state.clone(), reconcile_rx.clone()));
+        tokio::task::spawn(reconciler(dc.clone(), state.clone(), rx.clone()));
     }
     SupervisorCtl {
         cancel,
@@ -95,27 +99,35 @@ pub(super) fn supervise(
     }
 }
 
-#[derive(Debug)]
-struct ReconcilationTask {
-    object: DynamicObject,
-}
-
-async fn reconciler(
-    dc: DynController,
-    state: Arc<SupervisorState>,
-    rx: Arc<Mutex<mpsc::Receiver<ReconcilationTask>>>,
-) {
-    let recv = move || {
-        let rx = rx.clone();
-        async move { rx.lock().await.recv().await }
-    };
-    while let Some(task) = recv().await {
+async fn reconciler(dc: DynController, state: Arc<SupervisorState>, rx: QueueReceiver) {
+    let resource = (dc.vtable.api_resource)();
+    while let Some(task) = rx.recv().await {
+        // fetch latest object from the cache
+        let object = {
+            let st = state
+                .ws
+                .local_store(&resource)
+                .await
+                .expect("Store for top-level resource does not exist");
+            let obj_ref = ObjectRef::new_with(&task.name, resource.clone()).within(&task.namespace);
+            st.get(&obj_ref)
+        };
+        let object = match object {
+            Some(o) => o,
+            None => {
+                // object no longer exists in the cache.
+                // it means it was deleted, so no need to reconcile
+                // if it will be created again, we will receive another event
+                // for that.
+                continue;
+            }
+        };
         let dc = dc.clone();
         let client = state.client.clone();
         let ws = state.ws.clone();
         let applier = Applier::new(
             client.clone(),
-            ResourceExt::namespace(&task.object).as_deref(),
+            ResourceExt::namespace(&object).as_deref(),
             Strategy::Apply {
                 field_manager: format!("controller-{}", dc.meta.name),
             },
@@ -127,9 +139,9 @@ async fn reconciler(
                 client,
                 applier,
                 ws,
-                namespace: task.object.metadata.namespace.clone(),
+                namespace: object.metadata.namespace.clone(),
             };
-            let fut = (dc.vtable.reconcile)(task.object, &mut cx);
+            let fut = (dc.vtable.reconcile)(object, &mut cx);
             match fut.await {
                 Ok(_) => {
                     tracing::info!("Reconciled successfully");
@@ -144,26 +156,28 @@ async fn reconciler(
     }
 }
 
-async fn watch_toplevel(mut watch: Watcher, reconcile_tx: mpsc::Sender<ReconcilationTask>) {
+async fn watch_toplevel(mut watch: Watcher, tx: QueueSender) {
     loop {
         let item = watch.next().await;
         // toplevel resource definitely needs reconcilation
-        let task = ReconcilationTask {
-            object: (*item).clone(),
+        let key = TaskKey {
+            name: item.name(),
+            namespace: ResourceExt::namespace(&*item).unwrap_or_default(),
         };
-        let closed = reconcile_tx.send(task).await.is_err();
-        if closed {
-            tracing::info!("Channel closed");
-            break;
-        }
+        tx.send(key).await;
     }
+}
+
+struct NonOwnerWaits {
+    map: HashMap<(String, Option<String>), Vec<(String, Option<String>)>>,
 }
 
 async fn watch_child(
     mut watch: Watcher,
-    reconcile_tx: mpsc::Sender<ReconcilationTask>,
+    tx: QueueSender,
     toplevel_resource: ApiResource,
     toplevel_store: Store<DynamicObject>,
+    special_waits: Arc<Mutex<NonOwnerWaits>>,
 ) {
     loop {
         let item = watch.next().await;
@@ -184,25 +198,35 @@ async fn watch_child(
                         continue;
                     }
                 };
-                let task = ReconcilationTask { object };
-                let closed = reconcile_tx.send(task).await.is_err();
-                if closed {
-                    tracing::info!("Channel closed");
-                    return;
-                }
+                let key = TaskKey {
+                    name: own_ref.name,
+                    namespace: ResourceExt::namespace(&*item)
+                };
+                tx.send(&object).await;
             }
+        }
+        // maybe some non-owner wants this object
+        let waiters = {
+            let mut waits = special_waits.lock().await;
+            waits
+                .map
+                .remove(&(item.name(), ResourceExt::namespace(&*item)))
+        }
+        .unwrap_or_default();
+        for w in waiters {
+            tx.send(object)
         }
     }
 }
 
-#[tracing::instrument(skip(dc, state, cancel, toplevel_resource, reconcile_tx))]
+#[tracing::instrument(skip(dc, state, cancel, toplevel_resource, other_resources, tx))]
 async fn detector(
     dc: DynController,
     state: Arc<SupervisorState>,
     cancel: CancellationToken,
     toplevel_resource: ApiResource,
     other_resources: Vec<ApiResource>,
-    reconcile_tx: mpsc::Sender<ReconcilationTask>,
+    tx: QueueSender,
 ) {
     let mut resources = Vec::new();
     resources.push((dc.vtable.api_resource)());
@@ -210,11 +234,8 @@ async fn detector(
     let mut watches = Vec::new();
 
     let h = tokio::task::spawn(
-        watch_toplevel(
-            state.ws.watch(&toplevel_resource).await,
-            reconcile_tx.clone(),
-        )
-        .instrument(tracing::info_span!("Toplevel resource watcher")),
+        watch_toplevel(state.ws.watch(&toplevel_resource).await, tx.clone())
+            .instrument(tracing::info_span!("Toplevel resource watcher")),
     );
     watches.push(h);
     for other in other_resources {
@@ -226,7 +247,7 @@ async fn detector(
         let h = tokio::task::spawn(
             watch_child(
                 state.ws.watch(&other).await,
-                reconcile_tx.clone(),
+                tx.clone(),
                 toplevel_resource.clone(),
                 state
                     .ws
